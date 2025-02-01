@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Note-Taking</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; padding: 20px; background-color: #f9f9f9; }
+        h2 { color: #333; }
+        form { margin-bottom: 20px; }
+        input, button { padding: 10px; margin: 5px 0; width: 100%; max-width: 400px; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        pre { background: #fff; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+        .loading { font-size: 14px; color: #007bff; display: none; }
+    </style>
+</head>
+<body>
+
+    <h2>📝 Upload an Image of Your Notes</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" id="fileInput" accept="image/*">
+        <button type="button" onclick="uploadImage()">Upload</button>
+    </form>
+    <p class="loading" id="uploadLoading">Processing image... ⏳</p>
+
+    <h3>Extracted Text:</h3>
+    <pre id="extractedText">No text extracted yet.</pre>
+
+    <h3>AI Summary & Mind Map:</h3>
+    <pre id="aiSummary">No summary available.</pre>
+
+    <h2>📺 Summarize a YouTube Video</h2>
+    <form id="videoForm">
+        <input type="text" id="videoUrl" placeholder="Enter YouTube Video URL">
+        <button type="button" onclick="summarizeVideo()">Summarize</button>
+    </form>
+    <p class="loading" id="videoLoading">Analyzing video... ⏳</p>
+
+    <h3>AI Video Summary:</h3>
+    <pre id="videoSummary">No summary available.</pre>
+
+    <h3>Next Suggested Learning Topics:</h3>
+    <ul id="nextTopicsList"></ul>
+    
+    <button id="suggestTopicsBtn" onclick="getNextTopics()">Suggest Next Learning Steps</button>
+    
+    <script>
+
+    function getNextTopics() {
+        let extractedText = document.getElementById("extractedText").textContent;
+
+        // ✅ Debugging: Check if extracted text is available
+        if (!extractedText || extractedText.trim() === "") {
+            console.error("No extracted text found!");
+            alert("No extracted text available. Upload notes first.");
+            return;
+        }
+
+        fetch("/next_link", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ extracted_text: extractedText }) // ✅ Send JSON data
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Server Error: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            let topicsList = document.getElementById("nextTopicsList");
+            topicsList.innerHTML = ""; // ✅ Clear previous topics
+
+            if (data.topics && data.topics.length > 0) {
+                data.topics.forEach(topic => {
+                    let listItem = document.createElement("li");
+                    listItem.innerHTML = `<strong>${topic.name}</strong>: ${topic.reason} 
+                    <br><a href="${topic.link}" target="_blank">Learn More</a>`;
+                    topicsList.appendChild(listItem);
+                });
+            } else {
+                topicsList.innerHTML = "<li>No topics generated.</li>";
+            }
+        })
+        .catch(error => {
+            console.error("Error fetching topics:", error);
+            alert("Failed to fetch suggested topics. Check console for details.");
+        });
+    }
+        function uploadImage() {
+            let fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("Please select an image to upload.");
+                return;
+            }
+
+            let formData = new FormData();
+            formData.append("file", fileInput);
+
+            document.getElementById("uploadLoading").style.display = "block";
+            
+            fetch("/upload", {
+                method: "POST",
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("uploadLoading").style.display = "none";
+                document.getElementById("extractedText").textContent = data.extracted_text || "No text extracted.";
+                document.getElementById("aiSummary").textContent = data.ai_summary || "AI could not generate a summary.";
+            })
+            .catch(error => {
+                document.getElementById("uploadLoading").style.display = "none";
+                console.error("Error:", error);
+                alert("Failed to process image. Please try again.");
+            });
+        }
+
+        function summarizeVideo() {
+            let videoUrl = document.getElementById("videoUrl").value.trim();
+            if (!videoUrl) {
+                alert("Please enter a valid YouTube video URL.");
+                return;
+            }
+
+            document.getElementById("videoLoading").style.display = "block";
+
+            fetch("/summarize_video", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ video_url: videoUrl })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("videoLoading").style.display = "none";
+                document.getElementById("videoSummary").textContent = 
+                    "📌 Topics: " + (data.topics ? data.topics.join(", ") : "No topics found.") + 
+                    "\n📖 Summary: " + (data.ai_summary || "AI could not generate a summary.");
+            })
+            .catch(error => {
+                document.getElementById("videoLoading").style.display = "none";
+                console.error("Error:", error);
+                alert("Failed to process video. Please check the URL and try again.");
+            });
+        }
+
+    </script>
+
+</body>
+</html>
